@@ -15,7 +15,7 @@ if __name__ == '__main__':
     n_features = 16
 
     model = ModelSageConv(rec_features=3, con_features=1, n_features=n_features).double()
-    dataset = GraphDataset(root='my_archive')
+    dataset = GraphDataset(root='small_test_run')
 
     train_size = int(len(dataset) * 0.7)
     valid_size = int(len(dataset) * 0.15)
