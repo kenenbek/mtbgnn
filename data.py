@@ -22,7 +22,7 @@ class GraphDataset(Dataset):
     def get(self, idx):
         # Load a graph from a file
         data_path = os.path.join(self.root, self.file_list[idx])
-        data = torch.load(data_path)
+        data = torch.load(data_path, weights_only=False)
         return data
 
 
