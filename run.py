@@ -10,11 +10,16 @@ from sklearn.metrics import r2_score
 
 
 if __name__ == '__main__':
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print("Using device: ", device)
+
     batch_size = 4
     n_epochs = 10
     n_features = 16
 
     model = ModelSageConv(rec_features=3, con_features=1, n_features=n_features).double()
+    model.to(device)
+
     dataset = GraphDataset(root='small_test_run')
 
     train_size = int(len(dataset) * 0.7)
@@ -40,11 +45,11 @@ if __name__ == '__main__':
             optimizer.zero_grad()
 
             c_batch_size = int((torch.max(batch["reactions"].batch) + 1).item())
-            x_dict = {k: batch[k].x for k in batch.node_types}
-            edge_index_dict = {k: batch[k].edge_index for k in batch.edge_types}
+            x_dict = {k: batch[k].x.to(device) for k in batch.node_types}
+            edge_index_dict = {k: batch[k].edge_index.to(device) for k in batch.edge_types}
 
             out = model(x_dict, edge_index_dict)
-            loss = compute_loss(out, batch["reactions"]["y"], batch["S"], c_batch_size)
+            loss = compute_loss(out, batch["reactions"]["y"].to(device), batch["S"].to(device), c_batch_size)
             total_loss += loss.item()
 
             r2_min = r2_score(batch["reactions"]["y"][:, 0], out[:, 0].detach().numpy())
@@ -63,12 +68,12 @@ if __name__ == '__main__':
                 for batch in valid_loader:
 
                     c_batch_size = int((torch.max(batch["reactions"].batch) + 1).item())
-                    x_dict = {k: batch[k].x for k in batch.node_types}
-                    edge_index_dict = {k: batch[k].edge_index for k in batch.edge_types}
+                    x_dict = {k: batch[k].x.to(device) for k in batch.node_types}
+                    edge_index_dict = {k: batch[k].edge_index.to(device) for k in batch.edge_types}
 
                     out = model(x_dict,
                                 edge_index_dict)
-                    val_loss = compute_loss(out, batch["reactions"]["y"], batch["S"], c_batch_size)
+                    val_loss = compute_loss(out, batch["reactions"]["y"].to(device), batch["S"].to(device), c_batch_size)
                     validation_loss += val_loss.item()
 
                     r2_min = r2_score(batch["reactions"]["y"][:, 0], out[:, 0])
@@ -81,8 +86,8 @@ if __name__ == '__main__':
     r2_max_test = []
     with torch.no_grad():
         for data in test_loader:
-            x_dict = {k: batch[k].x for k in batch.node_types}
-            edge_index_dict = {k: batch[k].edge_index for k in batch.edge_types}
+            x_dict = {k: batch[k].x.to(device) for k in batch.node_types}
+            edge_index_dict = {k: batch[k].edge_index.to(device) for k in batch.edge_types}
 
             out = model(x_dict,
                         edge_index_dict)
