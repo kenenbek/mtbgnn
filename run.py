@@ -52,8 +52,8 @@ if __name__ == '__main__':
             loss = compute_loss(out, batch["reactions"]["y"].to(device), batch["S"].to(device), c_batch_size)
             total_loss += loss.item()
 
-            r2_min = r2_score(batch["reactions"]["y"][:, 0], out[:, 0].detach().numpy())
-            r2_max = r2_score(batch["reactions"]["y"][:, 1], out[:, 1].detach().numpy())
+            r2_min = r2_score(batch["reactions"]["y"][:, 0], out[:, 0].cpu().detach().numpy())
+            r2_max = r2_score(batch["reactions"]["y"][:, 1], out[:, 1].cpu().detach().numpy())
 
             loss.backward()
             optimizer.step()
@@ -76,8 +76,8 @@ if __name__ == '__main__':
                     val_loss = compute_loss(out, batch["reactions"]["y"].to(device), batch["S"].to(device), c_batch_size)
                     validation_loss += val_loss.item()
 
-                    r2_min = r2_score(batch["reactions"]["y"][:, 0], out[:, 0])
-                    r2_max = r2_score(batch["reactions"]["y"][:, 1], out[:, 1])
+                    r2_min = r2_score(batch["reactions"]["y"][:, 0], out[:, 0].cpu().detach().numpy())
+                    r2_max = r2_score(batch["reactions"]["y"][:, 1], out[:, 1].cpu().detach().numpy())
 
                 validation_loss /= len(valid_loader)
                 print(f"Epoch {epoch + 1}, Validation Loss: {validation_loss:.4f}")
@@ -92,8 +92,8 @@ if __name__ == '__main__':
             out = model(x_dict,
                         edge_index_dict)
 
-            r2_min = r2_score(batch["reactions"]["y"][:, 0], out[:, 0])
-            r2_max = r2_score(batch["reactions"]["y"][:, 1], out[:, 1])
+            r2_min = r2_score(batch["reactions"]["y"][:, 0], out[:, 0].cpu().detach().numpy())
+            r2_max = r2_score(batch["reactions"]["y"][:, 1], out[:, 1].cpu().detach().numpy())
 
             r2_min_test.append(r2_min)
             r2_max_test.append(r2_max)
