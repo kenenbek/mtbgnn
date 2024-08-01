@@ -7,9 +7,22 @@ from torch_geometric.loader import DataLoader
 import torch.nn.functional as F
 import torch.optim as optim
 from sklearn.metrics import r2_score
+import argparse
+
+from comet_ml import Experiment
+from comet_ml.integration.pytorch import log_model
 
 
 if __name__ == '__main__':
+    experiment = Experiment(
+        project_name="tb",
+        workspace="kenenbek"
+    )
+
+    parser = argparse.ArgumentParser(description="An argument parser")
+    parser.add_argument('--data', type=str, help='Path to the data file', default="small_test_run")
+    args = parser.parse_args()
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device: ", device)
 
@@ -20,7 +33,7 @@ if __name__ == '__main__':
     model = ModelSageConv(rec_features=3, con_features=1, n_features=n_features).double()
     model.to(device)
 
-    dataset = GraphDataset(root='small_test_run')
+    dataset = GraphDataset(root=args.data)
 
     train_size = int(len(dataset) * 0.7)
     valid_size = int(len(dataset) * 0.15)
@@ -37,50 +50,59 @@ if __name__ == '__main__':
 
     optimizer = optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08)
 
-    for epoch in range(n_epochs):
-        model.train()  # Set the model to training mode
-        total_loss = 0.0
+    with experiment.train():
+        step = 0
+        for epoch in range(n_epochs):
+            experiment.log_current_epoch(epoch)
+            model.train()
+            total_loss = 0.0
 
-        for batch in train_loader:
-            optimizer.zero_grad()
+            for batch in train_loader:
+                optimizer.zero_grad()
 
-            c_batch_size = int((torch.max(batch["reactions"].batch) + 1).item())
-            x_dict = {k: batch[k].x.to(device) for k in batch.node_types}
-            edge_index_dict = {k: batch[k].edge_index.to(device) for k in batch.edge_types}
+                c_batch_size = int((torch.max(batch["reactions"].batch) + 1).item())
+                x_dict = {k: batch[k].x.to(device) for k in batch.node_types}
+                edge_index_dict = {k: batch[k].edge_index.to(device) for k in batch.edge_types}
 
-            out = model(x_dict, edge_index_dict)
-            loss = compute_loss(out, batch["reactions"]["y"].to(device), batch["S"].to(device), c_batch_size)
-            total_loss += loss.item()
+                out = model(x_dict, edge_index_dict)
+                loss = compute_loss(out, batch["reactions"]["y"].to(device), batch["S"].to(device), c_batch_size)
+                total_loss += loss.item()
 
-            r2_min = r2_score(batch["reactions"]["y"][:, 0], out[:, 0].cpu().detach().numpy())
-            r2_max = r2_score(batch["reactions"]["y"][:, 1], out[:, 1].cpu().detach().numpy())
+                r2_min = r2_score(batch["reactions"]["y"][:, 0], out[:, 0].cpu().detach().numpy())
+                r2_max = r2_score(batch["reactions"]["y"][:, 1], out[:, 1].cpu().detach().numpy())
 
-            loss.backward()
-            optimizer.step()
+                experiment.log_metric("loss_step", loss.item(), epoch=step)
+                experiment.log_metric("r2_min", r2_min, epoch=step)
+                experiment.log_metric("r2_max", r2_max, epoch=step)
+                step += 1
 
-        average_loss = total_loss / len(train_loader)
-        print(f'Epoch {epoch + 1}/{n_epochs}, Loss: {average_loss:.4f}')
+                loss.backward()
+                optimizer.step()
 
-        if epoch % 20 == 0:
-            model.eval()
-            with torch.no_grad():
-                validation_loss = 0
-                for batch in valid_loader:
+            average_loss = total_loss / len(train_loader)
+            print(f'Epoch {epoch + 1}/{n_epochs}, Loss: {average_loss:.4f}')
+            experiment.log_metric("loss_epoch", average_loss, epoch=epoch)
 
-                    c_batch_size = int((torch.max(batch["reactions"].batch) + 1).item())
-                    x_dict = {k: batch[k].x.to(device) for k in batch.node_types}
-                    edge_index_dict = {k: batch[k].edge_index.to(device) for k in batch.edge_types}
+            if epoch % 20 == 0:
+                model.eval()
+                with torch.no_grad():
+                    validation_loss = 0
+                    for batch in valid_loader:
 
-                    out = model(x_dict,
-                                edge_index_dict)
-                    val_loss = compute_loss(out, batch["reactions"]["y"].to(device), batch["S"].to(device), c_batch_size)
-                    validation_loss += val_loss.item()
+                        c_batch_size = int((torch.max(batch["reactions"].batch) + 1).item())
+                        x_dict = {k: batch[k].x.to(device) for k in batch.node_types}
+                        edge_index_dict = {k: batch[k].edge_index.to(device) for k in batch.edge_types}
 
-                    r2_min = r2_score(batch["reactions"]["y"][:, 0], out[:, 0].cpu().detach().numpy())
-                    r2_max = r2_score(batch["reactions"]["y"][:, 1], out[:, 1].cpu().detach().numpy())
+                        out = model(x_dict,
+                                    edge_index_dict)
+                        val_loss = compute_loss(out, batch["reactions"]["y"].to(device), batch["S"].to(device), c_batch_size)
+                        validation_loss += val_loss.item()
 
-                validation_loss /= len(valid_loader)
-                print(f"Epoch {epoch + 1}, Validation Loss: {validation_loss:.4f}")
+                        r2_min = r2_score(batch["reactions"]["y"][:, 0], out[:, 0].cpu().detach().numpy())
+                        r2_max = r2_score(batch["reactions"]["y"][:, 1], out[:, 1].cpu().detach().numpy())
+
+                    validation_loss /= len(valid_loader)
+                    print(f"Epoch {epoch + 1}, Validation Loss: {validation_loss:.4f}")
 
     r2_min_test = []
     r2_max_test = []
