@@ -103,6 +103,7 @@ if __name__ == '__main__':
 
                     validation_loss /= len(valid_loader)
                     print(f"Epoch {epoch + 1}, Validation Loss: {validation_loss:.4f}")
+                    experiment.log_metric("loss_val", validation_loss)
 
     r2_min_test = []
     r2_max_test = []
@@ -123,6 +124,5 @@ if __name__ == '__main__':
     print("r2_min_test: ", np.mean(r2_min_test))
     print("r2_max_test: ", np.mean(r2_max_test))
 
-
-
-
+    experiment.log_metric("r2_min_test", np.mean(r2_min_test))
+    experiment.log_metric("r2_max_test", np.mean(r2_max_test))
