@@ -47,8 +47,8 @@ if __name__ == '__main__':
             loss = compute_loss(out, batch["reactions"]["y"], batch["S"], c_batch_size)
             total_loss += loss.item()
 
-            r2_min = r2_score(batch["reactions"]["y"][:, 0], out[:, 0])
-            r2_max = r2_score(batch["reactions"]["y"][:, 1], out[:, 1])
+            r2_min = r2_score(batch["reactions"]["y"][:, 0], out[:, 0].detach().numpy())
+            r2_max = r2_score(batch["reactions"]["y"][:, 1], out[:, 1].detach().numpy())
 
             loss.backward()
             optimizer.step()
