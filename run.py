@@ -22,14 +22,15 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="An argument parser")
     parser.add_argument('--data', type=str, help='Path to the data file', default="small_test_run")
     parser.add_argument('--epochs', type=int, help='number of training epochs', default=10)
+    parser.add_argument('--features', type=int, help='number of features', default=32)
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device: ", device)
 
     batch_size = 64
-    n_epochs = 10
-    n_features = 16
+    n_epochs = args.epochs
+    n_features = args.features
 
     model = ModelSageConv(rec_features=3, con_features=1, n_features=n_features).double()
     model.to(device)
