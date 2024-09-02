@@ -1,3 +1,6 @@
+from comet_ml import Experiment
+from comet_ml.integration.pytorch import log_model
+
 import numpy as np
 
 from data import GraphDataset
@@ -8,9 +11,6 @@ import torch.nn.functional as F
 import torch.optim as optim
 from sklearn.metrics import r2_score
 import argparse
-
-from comet_ml import Experiment
-from comet_ml.integration.pytorch import log_model
 
 
 if __name__ == '__main__':
