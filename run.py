@@ -128,3 +128,9 @@ if __name__ == '__main__':
 
     experiment.log_metric("r2_min_test", np.mean(r2_min_test))
     experiment.log_metric("r2_max_test", np.mean(r2_max_test))
+
+    # Save the model
+    torch.save(model.state_dict(), "model.pth")
+
+    # Log the model file to Comet ML
+    experiment.log_model("model", "model.pth")
