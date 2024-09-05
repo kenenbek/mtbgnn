@@ -79,6 +79,6 @@ def compute_loss(out, true_fva, S, batch_size):
     sv_loss_min = torch.square(torch.matmul(S, out[:, 0].view(batch_size, -1, 1))).mean()
     sv_loss_max = torch.square(torch.matmul(S, out[:, 1].view(batch_size, -1, 1))).mean()
 
-    loss = fva_loss_min + fva_loss_max + sv_loss_min + sv_loss_max
+    loss = fva_loss_min + fva_loss_max# + sv_loss_min + sv_loss_max
 
     return loss

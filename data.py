@@ -1,6 +1,7 @@
 import os
 import torch
 from torch_geometric.data import Dataset, HeteroData
+from torch_geometric.data import InMemoryDataset
 
 
 class GraphDataset(Dataset):
@@ -24,6 +25,12 @@ class GraphDataset(Dataset):
         data_path = os.path.join(self.root, self.file_list[idx])
         data = torch.load(data_path, weights_only=False)
         return data
+
+
+class FilteredDataset(InMemoryDataset):
+    def __init__(self, root, data_list):
+        self.data, self.slices = self.collate(data_list)
+        super(FilteredDataset, self).__init__(root)
 
 
 from torch_geometric.loader import DataLoader
