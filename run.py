@@ -65,7 +65,7 @@ if __name__ == '__main__':
 
                 x_dict, edge_index_dict = create_x_and_edges(single_hetero_graph, device)
 
-                out = model(x_dict, edge_index_dict, single_hetero_graph["reactions"].batch)
+                out = model(x_dict, edge_index_dict, single_hetero_graph["reactions"].batch.to(device))
                 loss_obj = F.mse_loss(out, single_hetero_graph["objective_value"].unsqueeze(1).double().to(device))
 
                 loss_obj.backward()
@@ -96,7 +96,7 @@ if __name__ == '__main__':
                 trues = []
                 for permute_batch in permutation_loader:
                     x_dict, edge_index_dict = create_x_and_edges(permute_batch, device)
-                    out = model(x_dict, edge_index_dict, permute_batch["reactions"].batch)
+                    out = model(x_dict, edge_index_dict, permute_batch["reactions"].batch.to(device))
 
                     loss_fva = F.mse_loss(out, permute_batch["reactions"].y.unsqueeze(1).to(device))
                     loss += loss_fva
