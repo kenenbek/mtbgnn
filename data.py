@@ -33,7 +33,7 @@ class FilteredDataset(InMemoryDataset):
 
 
 class FvaInstantDataset(Dataset):
-    def __init__(self, reactions_features, constraints, edge_index_dict, edge_features, y):
+    def __init__(self, reactions_features, constraints, edge_index_dict, edge_features, y, device):
         """
         Args:
             reactions_features: has to be 2D tensor
@@ -48,6 +48,7 @@ class FvaInstantDataset(Dataset):
         self.edge_features = edge_features
         self.y = y
         self.num_reactions = reactions_features.size(0)
+        self.device = device
 
     def len(self):
         """Returns the total number of samples."""
@@ -63,7 +64,7 @@ class FvaInstantDataset(Dataset):
             c_vector[idx - self.num_reactions] = -1
             label = self.y[idx - self.num_reactions, 1]
 
-        features = torch.cat((c_vector.unsqueeze(1), self.reactions_features), dim=1)
+        features = torch.cat((c_vector.unsqueeze(1).to(self.device), self.reactions_features), dim=1)
 
         new_graph = HeteroData()
 

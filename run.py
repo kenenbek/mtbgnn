@@ -83,7 +83,8 @@ if __name__ == '__main__':
                                       x_dict["constraints"],
                                       edge_index_dict,
                                       single_hetero_graph[("constraints", "to", "reactions")]["edge_attr"],
-                                      single_hetero_graph["reactions"].y)
+                                      single_hetero_graph["reactions"].y,
+                                                        device=device)
                 permutation_loader = DataLoader(permutation_dataset,
                                                 batch_size=batch_size,
                                                 shuffle=True,
