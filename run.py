@@ -11,6 +11,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from sklearn.metrics import r2_score
 import argparse
+import torch.multiprocessing as mp
 
 
 if __name__ == '__main__':
@@ -18,6 +19,7 @@ if __name__ == '__main__':
         project_name="tb",
         workspace="kenenbek"
     )
+    mp.set_start_method('spawn', force=True)
 
     parser = argparse.ArgumentParser(description="An argument parser")
     parser.add_argument('--data', type=str, help='Path to the data file', default="small_test_run")
