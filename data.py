@@ -1,7 +1,6 @@
 import os
 import torch
-from torch_geometric.data import Dataset, HeteroData
-from torch_geometric.data import InMemoryDataset
+from torch_geometric.data import Dataset, HeteroData, InMemoryDataset
 
 
 class GraphDataset(Dataset):
@@ -33,19 +32,60 @@ class FilteredDataset(InMemoryDataset):
         super(FilteredDataset, self).__init__(root)
 
 
-from torch_geometric.loader import DataLoader
+class FvaInstantDataset(Dataset):
+    def __init__(self, reactions_features, constraints, edge_index_dict, edge_features, y):
+        """
+        Args:
+            reactions_features: has to be 2D tensor
+        """
+        super().__init__()
+        assert reactions_features.ndimension() == 2, "reactions_features must be a 2D tensor."
+        assert reactions_features.size(1) == 2, "reactions_features must have exactly 2 columns."
+
+        self.reactions_features = reactions_features
+        self.constraints = constraints
+        self.edge_index_dict = edge_index_dict
+        self.edge_features = edge_features
+        self.y = y
+        self.num_reactions = reactions_features.size(0)
+
+    def len(self):
+        """Returns the total number of samples."""
+        return 2 * self.num_reactions
+
+    def get(self, idx):
+        c_vector = torch.zeros(self.num_reactions)
+
+        if idx < self.num_reactions:
+            c_vector[idx] = 1
+            label = self.y[idx, 0]
+        else:
+            c_vector[idx - self.num_reactions] = -1
+            label = self.y[idx - self.num_reactions, 1]
+
+        features = torch.cat((c_vector.unsqueeze(1), self.reactions_features), dim=1)
+
+        new_graph = HeteroData()
+
+        new_graph["reactions"].x = features
+        new_graph["reactions"].y = label
+
+        new_graph["constraints"].x = self.constraints
+        new_graph[("constraints", "to", "reactions")].edge_index = self.edge_index_dict[
+            ('constraints', 'to', 'reactions')]
+        new_graph[("constraints", "to", "reactions")].edge_attr = self.edge_features
+
+        new_graph[("reactions", "to", "constraints")].edge_index = self.edge_index_dict[
+            ('reactions', 'to', 'constraints')]
+        new_graph[("reactions", "to", "constraints")].edge_attr = self.edge_features
+
+        return new_graph
 
 
-
-# # Example training loop
-# for data in train_loader:  # Iterate over each batch
-#     out = model(data.x, data.edge_index, data.batch)  # Assuming model is already defined
-#     # Compute loss and backpropagate
-#     # optimizer.zero_grad()
-#     # loss.backward()
-#     # optimizer.step()
-
-
+def create_x_and_edges(hetero_batch, device):
+    x_dict = {node_type: hetero_batch[node_type].x.to(device) for node_type in hetero_batch.node_types}
+    edge_index_dict = {k: hetero_batch[k].edge_index.to(device) for k in hetero_batch.edge_types}
+    return x_dict, edge_index_dict
 
 if __name__ == '__main__':
     # Initialize your dataset

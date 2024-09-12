@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import HeteroConv, SAGEConv
+from torch_geometric.nn import global_mean_pool
 
 
 class ModelSageConv(torch.nn.Module):
@@ -43,9 +44,13 @@ class ModelSageConv(torch.nn.Module):
         }, aggr='mean')
 
         self.output1 = nn.Linear(n_features, n_features)
-        self.output2 = nn.Linear(n_features, 2)
+        self.norm1 = nn.BatchNorm1d(n_features)
+        self.output2 = nn.Linear(n_features, n_features)
+        self.norm2 = nn.BatchNorm1d(n_features)
+        self.output3 = nn.Linear(n_features, 1)
 
-    def forward(self, x_dict, edge_index_dict):
+
+    def forward(self, x_dict, edge_index_dict, batch_mask):
         x_dict["reactions"] = self.init_rec(x_dict["reactions"])
         x_dict["constraints"] = self.init_con(x_dict["constraints"])
 
@@ -62,8 +67,15 @@ class ModelSageConv(torch.nn.Module):
         reactions_features = output["reactions"]
 
         out = self.output1(reactions_features)
+        out = self.norm1(out)
         out = F.relu(out)
+
         out = self.output2(out)
+        out = self.norm2(out)
+        out = F.relu(out)
+
+        out = global_mean_pool(out, batch_mask)
+        out = self.output3(out)
 
         return out
 

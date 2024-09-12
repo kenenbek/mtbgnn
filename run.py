@@ -3,7 +3,7 @@ from comet_ml.integration.pytorch import log_model
 
 import numpy as np
 
-from data import GraphDataset
+from data import GraphDataset, FvaInstantDataset, create_x_and_edges
 from models import ModelSageConv, compute_loss
 import torch
 from torch_geometric.loader import DataLoader
@@ -43,11 +43,11 @@ if __name__ == '__main__':
     train_dataset, valid_dataset, test_dataset = torch.utils.data.random_split(dataset,
                                                                                [train_size, valid_size, test_size])
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,
+    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True,
                               follow_batch=["reactions", "constraints"])
-    valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False,
+    valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False,
                               follow_batch=["reactions", "constraints"])
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False,
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False,
                              follow_batch=["reactions", "constraints"])
 
     optimizer = optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08)
@@ -59,23 +59,60 @@ if __name__ == '__main__':
             model.train()
             total_loss = 0.0
 
-            for batch in train_loader:
+            for single_hetero_graph in train_loader:
+                loss = 0.
                 optimizer.zero_grad()
 
-                c_batch_size = int((torch.max(batch["reactions"].batch) + 1).item())
-                x_dict = {k: batch[k].x.to(device) for k in batch.node_types}
-                edge_index_dict = {k: batch[k].edge_index.to(device) for k in batch.edge_types}
+                x_dict, edge_index_dict = create_x_and_edges(single_hetero_graph, device)
 
-                out = model(x_dict, edge_index_dict)
-                loss = compute_loss(out, batch["reactions"]["y"].to(device), batch["S"].to(device), c_batch_size)
+                out = model(x_dict, edge_index_dict, single_hetero_graph["reactions"].batch)
+                loss_obj = F.mse_loss(out, single_hetero_graph["objective_value"].unsqueeze(1).double().to(device))
+
+                loss_obj.backward()
+                optimizer.step()
+                optimizer.zero_grad()
+
+                out = out.detach()
+
+                x_dict = {node_type: single_hetero_graph[node_type].x.to(device) for node_type in single_hetero_graph.node_types}
+                biomass_index = torch.argmin(x_dict["reactions"][:, 0]).item()
+                x_dict["reactions"][biomass_index] = torch.tensor([0, out.item(), out.item()], device=device)
+                reactions = x_dict["reactions"][:, 1:]
+
+                permutation_dataset = FvaInstantDataset(reactions,
+                                      x_dict["constraints"],
+                                      edge_index_dict,
+                                      single_hetero_graph[("constraints", "to", "reactions")]["edge_attr"],
+                                      single_hetero_graph["reactions"].y)
+                permutation_loader = DataLoader(permutation_dataset,
+                                                batch_size=batch_size,
+                                                shuffle=True,
+                                                num_workers=4,
+                                                follow_batch=["reactions", "constraints"]
+                                                )
+
+
+                outs = []
+                trues = []
+                for permute_batch in permutation_loader:
+                    x_dict, edge_index_dict = create_x_and_edges(permute_batch, device)
+                    out = model(x_dict, edge_index_dict, permute_batch["reactions"].batch)
+
+                    loss_fva = F.mse_loss(out, permute_batch["reactions"].y.unsqueeze(1).to(device))
+                    loss += loss_fva
+
+                    outs.extend(out.cpu().detach().squeeze(1).numpy().tolist())
+                    trues.extend(permute_batch["reactions"].y.cpu().tolist())
+
                 total_loss += loss.item()
 
-                r2_min = r2_score(batch["reactions"]["y"][:, 0], out[:, 0].cpu().detach().numpy())
-                r2_max = r2_score(batch["reactions"]["y"][:, 1], out[:, 1].cpu().detach().numpy())
+                trues = np.array(trues)
+                outs = np.array(outs)
+                r2 = r2_score(trues, outs)
 
                 experiment.log_metric("loss_step", loss.item(), epoch=step)
-                experiment.log_metric("r2_min", r2_min, epoch=step)
-                experiment.log_metric("r2_max", r2_max, epoch=step)
+                experiment.log_metric("r2", r2, epoch=step)
+
                 step += 1
 
                 loss.backward()
@@ -84,50 +121,49 @@ if __name__ == '__main__':
             average_loss = total_loss / len(train_loader)
             print(f'Epoch {epoch + 1}/{n_epochs}, Loss: {average_loss:.4f}')
             experiment.log_metric("loss_epoch", average_loss, epoch=epoch)
-
-            if epoch % 20 == 0:
-                model.eval()
-                with torch.no_grad():
-                    validation_loss = 0
-                    for batch in valid_loader:
-
-                        c_batch_size = int((torch.max(batch["reactions"].batch) + 1).item())
-                        x_dict = {k: batch[k].x.to(device) for k in batch.node_types}
-                        edge_index_dict = {k: batch[k].edge_index.to(device) for k in batch.edge_types}
-
-                        out = model(x_dict,
-                                    edge_index_dict)
-                        val_loss = compute_loss(out, batch["reactions"]["y"].to(device), batch["S"].to(device), c_batch_size)
-                        validation_loss += val_loss.item()
-
-                        r2_min = r2_score(batch["reactions"]["y"][:, 0], out[:, 0].cpu().detach().numpy())
-                        r2_max = r2_score(batch["reactions"]["y"][:, 1], out[:, 1].cpu().detach().numpy())
-
-                    validation_loss /= len(valid_loader)
-                    print(f"Epoch {epoch + 1}, Validation Loss: {validation_loss:.4f}")
-                    experiment.log_metric("loss_val", validation_loss)
-
-    r2_min_test = []
-    r2_max_test = []
-    with torch.no_grad():
-        for data in test_loader:
-            x_dict = {k: batch[k].x.to(device) for k in batch.node_types}
-            edge_index_dict = {k: batch[k].edge_index.to(device) for k in batch.edge_types}
-
-            out = model(x_dict,
-                        edge_index_dict)
-
-            r2_min = r2_score(batch["reactions"]["y"][:, 0], out[:, 0].cpu().detach().numpy())
-            r2_max = r2_score(batch["reactions"]["y"][:, 1], out[:, 1].cpu().detach().numpy())
-
-            r2_min_test.append(r2_min)
-            r2_max_test.append(r2_max)
-
-    print("r2_min_test: ", np.mean(r2_min_test))
-    print("r2_max_test: ", np.mean(r2_max_test))
-
-    experiment.log_metric("r2_min_test", np.mean(r2_min_test))
-    experiment.log_metric("r2_max_test", np.mean(r2_max_test))
+    #
+    #         if epoch % 5 == 0:
+    #             model.eval()
+    #             with torch.no_grad():
+    #                 validation_loss = 0
+    #                 for batch in valid_loader:
+    #
+    #                     x_dict
+    #                     edge_index_dict = {k: batch[k].edge_index.to(device) for k in batch.edge_types}
+    #
+    #                     out = model(x_dict,
+    #                                 edge_index_dict)
+    #                     val_loss = compute_loss(out, batch["reactions"]["y"].to(device), batch["S"].to(device), c_batch_size)
+    #                     validation_loss += val_loss.item()
+    #
+    #                     r2_min = r2_score(batch["reactions"]["y"][:, 0], out[:, 0].cpu().detach().numpy())
+    #                     r2_max = r2_score(batch["reactions"]["y"][:, 1], out[:, 1].cpu().detach().numpy())
+    #
+    #                 validation_loss /= len(valid_loader)
+    #                 print(f"Epoch {epoch + 1}, Validation Loss: {validation_loss:.4f}")
+    #                 experiment.log_metric("loss_val", validation_loss)
+    #
+    # r2_min_test = []
+    # r2_max_test = []
+    # with torch.no_grad():
+    #     for data in test_loader:
+    #         x_dict = {k: batch[k].x.to(device) for k in batch.node_types}
+    #         edge_index_dict = {k: batch[k].edge_index.to(device) for k in batch.edge_types}
+    #
+    #         out = model(x_dict,
+    #                     edge_index_dict)
+    #
+    #         r2_min = r2_score(batch["reactions"]["y"][:, 0], out[:, 0].cpu().detach().numpy())
+    #         r2_max = r2_score(batch["reactions"]["y"][:, 1], out[:, 1].cpu().detach().numpy())
+    #
+    #         r2_min_test.append(r2_min)
+    #         r2_max_test.append(r2_max)
+    #
+    # print("r2_min_test: ", np.mean(r2_min_test))
+    # print("r2_max_test: ", np.mean(r2_max_test))
+    #
+    # experiment.log_metric("r2_min_test", np.mean(r2_min_test))
+    # experiment.log_metric("r2_max_test", np.mean(r2_max_test))
 
     # Save the model
     torch.save(model.state_dict(), "model.pth")
