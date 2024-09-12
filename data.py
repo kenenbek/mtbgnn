@@ -64,7 +64,8 @@ class FvaInstantDataset(Dataset):
             c_vector[idx - self.num_reactions] = -1
             label = self.y[idx - self.num_reactions, 1]
 
-        features = torch.cat((c_vector.unsqueeze(1).to(self.device), self.reactions_features), dim=1)
+        c_vector = c_vector.to(self.device)
+        features = torch.cat((c_vector.unsqueeze(1), self.reactions_features), dim=1)
 
         new_graph = HeteroData()
 
