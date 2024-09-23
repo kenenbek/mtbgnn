@@ -50,7 +50,7 @@ class ModelSageConv(torch.nn.Module):
         self.output3 = nn.Linear(n_features, 1)
 
 
-    def forward(self, x_dict, edge_index_dict, batch_mask):
+    def forward(self, x_dict, edge_index_dict, batch_mask, y_sign):
         x_dict["reactions"] = self.init_rec(x_dict["reactions"])
         x_dict["constraints"] = self.init_con(x_dict["constraints"])
 
@@ -75,9 +75,8 @@ class ModelSageConv(torch.nn.Module):
         out = F.relu(out)
 
         out = global_mean_pool(out, batch_mask)
-        out = self.output3(out)
-
-        return out
+        out = self.output3(out) * y_sign.unsqueeze(1)
+        return out.squeeze(1)
 
 
 def compute_loss(out, true_fva, S, batch_size):

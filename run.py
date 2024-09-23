@@ -3,7 +3,8 @@ from comet_ml.integration.pytorch import log_model
 
 import numpy as np
 
-from data import GraphDataset, FvaInstantDataset, create_x_and_edges
+from data import GraphDataset, GraphPermutedDataset, create_x_and_edges
+from torch.utils.data import ConcatDataset
 from models import ModelSageConv, compute_loss
 import torch
 from torch_geometric.loader import DataLoader
@@ -13,6 +14,32 @@ from sklearn.metrics import r2_score
 import argparse
 import torch.multiprocessing as mp
 
+
+def fva_pass_without_grad(model, single_hetero_graph, len_dataset, obj_value, y_sign, batch_size, num_workers, device):
+    dataset = GraphPermutedDataset(single_hetero_graph,
+                                          len_dataset=len_dataset,
+                                           y_sign=y_sign
+                                  )
+    dataset.set_biomass_constraint(obj_value)
+
+    val_loader = DataLoader(dataset,
+                            batch_size=batch_size,
+                            shuffle=False,
+                            num_workers=num_workers,
+                            follow_batch=["reactions", "constraints"]
+                            )
+
+    outs = []
+    true_y = []
+
+    for batch in val_loader:
+        x_dict, edge_index_dict, batch_indices, y, y_sign = create_x_and_edges(batch, device)
+        out = model(x_dict, edge_index_dict, batch_indices, y_sign)
+        outs.extend(out.cpu().tolist())
+        true_y.extend(y.cpu().tolist())
+
+    r2 = r2_score(true_y, outs)
+    return r2
 
 if __name__ == '__main__':
     experiment = Experiment(
@@ -33,6 +60,7 @@ if __name__ == '__main__':
     batch_size = 64
     n_epochs = args.epochs
     n_features = args.features
+    num_workers = 4
 
     model = ModelSageConv(rec_features=3, con_features=1, n_features=n_features).double()
     model.to(device)
@@ -59,114 +87,94 @@ if __name__ == '__main__':
         for epoch in range(n_epochs):
             experiment.log_current_epoch(epoch)
             model.train()
-            total_loss = 0.0
 
             for single_hetero_graph in train_loader:
-                loss = 0.
-                optimizer.zero_grad()
+                len_dataset = 2 * single_hetero_graph["reactions"].x.shape[0]
+                permutation_dataset = GraphPermutedDataset(single_hetero_graph,
+                                                           len_dataset=len_dataset,
+                                                           y_sign=None)
+                permute_train_loader = DataLoader(permutation_dataset,
+                                                  batch_size=64,
+                                                  shuffle=True,
+                                                  num_workers=0,
+                                                  follow_batch=["reactions", "constraints"]
+                                                  )
+                for permute_batch in permute_train_loader:
+                    optimizer.zero_grad()
+                    x_dict, edge_index_dict, batch_indices, y, y_sign = create_x_and_edges(permute_batch, device)
+                    out = model(x_dict, edge_index_dict, batch_indices, y_sign)
+                    loss = F.mse_loss(out, y)
+                    loss.backward()
+                    optimizer.step()
 
-                x_dict, edge_index_dict = create_x_and_edges(single_hetero_graph, device)
+            if epoch % 3 == 0:
+                model.eval()
+                with torch.no_grad():
+                    r2_min_val = []
+                    r2_max_val = []
+                    for single_hetero_graph in valid_loader:
+                        x_dict, edge_index_dict, batch_indices, y, y_sign = create_x_and_edges(single_hetero_graph,
+                                                                                               device,
+                                                                                               fba=True)
+                        obj_value = model(x_dict, edge_index_dict, batch_indices, y_sign)
+                        len_dataset = single_hetero_graph["reactions"].x.shape[0]
 
-                out = model(x_dict, edge_index_dict, single_hetero_graph["reactions"].batch.to(device))
-                loss_obj = F.mse_loss(out, single_hetero_graph["objective_value"].unsqueeze(1).double().to(device))
+                        r2_min = fva_pass_without_grad(model=model,
+                                                       single_hetero_graph=single_hetero_graph,
+                                                       len_dataset=len_dataset,
+                                                       obj_value=obj_value,
+                                                       y_sign=1,
+                                                       batch_size=batch_size,
+                                                       num_workers=num_workers,
+                                                       device=device)
 
-                loss_obj.backward()
-                optimizer.step()
-                optimizer.zero_grad()
+                        r2_max = fva_pass_without_grad(model=model,
+                                                       single_hetero_graph=single_hetero_graph,
+                                                       len_dataset=len_dataset,
+                                                       obj_value=obj_value,
+                                                       y_sign=-1,
+                                                       batch_size=batch_size,
+                                                       num_workers=num_workers,
+                                                       device=device)
+                        r2_min_val.append(r2_min)
+                        r2_max_val.append(r2_max)
 
-                out = out.detach()
+                    experiment.log_metric("r2_min_val", np.mean(r2_min_val))
+                    experiment.log_metric("r2_max_val", np.mean(r2_max_val))
 
-                x_dict = {node_type: single_hetero_graph[node_type].x.to(device) for node_type in single_hetero_graph.node_types}
-                biomass_index = torch.argmin(x_dict["reactions"][:, 0]).item()
-                x_dict["reactions"][biomass_index] = torch.tensor([0, out.item(), out.item()], device=device)
-                reactions = x_dict["reactions"][:, 1:]
+    ## testing
+    with torch.no_grad():
+        model.eval()
+        r2_min_test = []
+        r2_max_test = []
+        for single_hetero_graph in test_loader:
+            x_dict, edge_index_dict, batch_indices, y, y_sign = create_x_and_edges(single_hetero_graph,
+                                                                                   device,
+                                                                                   fba=True)
+            obj_value = model(x_dict, edge_index_dict, batch_indices, y_sign)
+            len_dataset = single_hetero_graph["reactions"].x.shape[0]
 
-                permutation_dataset = FvaInstantDataset(reactions,
-                                      x_dict["constraints"],
-                                      edge_index_dict,
-                                      single_hetero_graph[("constraints", "to", "reactions")]["edge_attr"],
-                                      single_hetero_graph["reactions"].y,
-                                                        device=device)
-                permutation_loader = DataLoader(permutation_dataset,
-                                                batch_size=batch_size,
-                                                shuffle=True,
-                                                num_workers=4,
-                                                follow_batch=["reactions", "constraints"]
-                                                )
+            r2_min = fva_pass_without_grad(model=model,
+                                           single_hetero_graph=single_hetero_graph,
+                                           len_dataset=len_dataset,
+                                           obj_value=obj_value,
+                                           y_sign=1,
+                                           batch_size=batch_size,
+                                           num_workers=num_workers,
+                                           device=device)
 
-
-                outs = []
-                trues = []
-                for permute_batch in permutation_loader:
-                    x_dict, edge_index_dict = create_x_and_edges(permute_batch, device)
-                    out = model(x_dict, edge_index_dict, permute_batch["reactions"].batch.to(device))
-
-                    loss_fva = F.mse_loss(out, permute_batch["reactions"].y.unsqueeze(1).to(device))
-                    loss += loss_fva
-
-                    outs.extend(out.cpu().detach().squeeze(1).numpy().tolist())
-                    trues.extend(permute_batch["reactions"].y.cpu().tolist())
-
-                total_loss += loss.item()
-
-                trues = np.array(trues)
-                outs = np.array(outs)
-                r2 = r2_score(trues, outs)
-
-                experiment.log_metric("loss_step", loss.item(), epoch=step)
-                experiment.log_metric("r2", r2, epoch=step)
-
-                step += 1
-
-                loss.backward()
-                optimizer.step()
-
-            average_loss = total_loss / len(train_loader)
-            print(f'Epoch {epoch + 1}/{n_epochs}, Loss: {average_loss:.4f}')
-            experiment.log_metric("loss_epoch", average_loss, epoch=epoch)
-    #
-    #         if epoch % 5 == 0:
-    #             model.eval()
-    #             with torch.no_grad():
-    #                 validation_loss = 0
-    #                 for batch in valid_loader:
-    #
-    #                     x_dict
-    #                     edge_index_dict = {k: batch[k].edge_index.to(device) for k in batch.edge_types}
-    #
-    #                     out = model(x_dict,
-    #                                 edge_index_dict)
-    #                     val_loss = compute_loss(out, batch["reactions"]["y"].to(device), batch["S"].to(device), c_batch_size)
-    #                     validation_loss += val_loss.item()
-    #
-    #                     r2_min = r2_score(batch["reactions"]["y"][:, 0], out[:, 0].cpu().detach().numpy())
-    #                     r2_max = r2_score(batch["reactions"]["y"][:, 1], out[:, 1].cpu().detach().numpy())
-    #
-    #                 validation_loss /= len(valid_loader)
-    #                 print(f"Epoch {epoch + 1}, Validation Loss: {validation_loss:.4f}")
-    #                 experiment.log_metric("loss_val", validation_loss)
-    #
-    # r2_min_test = []
-    # r2_max_test = []
-    # with torch.no_grad():
-    #     for data in test_loader:
-    #         x_dict = {k: batch[k].x.to(device) for k in batch.node_types}
-    #         edge_index_dict = {k: batch[k].edge_index.to(device) for k in batch.edge_types}
-    #
-    #         out = model(x_dict,
-    #                     edge_index_dict)
-    #
-    #         r2_min = r2_score(batch["reactions"]["y"][:, 0], out[:, 0].cpu().detach().numpy())
-    #         r2_max = r2_score(batch["reactions"]["y"][:, 1], out[:, 1].cpu().detach().numpy())
-    #
-    #         r2_min_test.append(r2_min)
-    #         r2_max_test.append(r2_max)
-    #
-    # print("r2_min_test: ", np.mean(r2_min_test))
-    # print("r2_max_test: ", np.mean(r2_max_test))
-    #
-    # experiment.log_metric("r2_min_test", np.mean(r2_min_test))
-    # experiment.log_metric("r2_max_test", np.mean(r2_max_test))
+            r2_max = fva_pass_without_grad(model=model,
+                                           single_hetero_graph=single_hetero_graph,
+                                           len_dataset=len_dataset,
+                                           obj_value=obj_value,
+                                           y_sign=-1,
+                                           batch_size=batch_size,
+                                           num_workers=num_workers,
+                                           device=device)
+            r2_min_test.append(r2_min)
+            r2_max_test.append(r2_max)
+    experiment.log_metric("r2_min_test", np.mean(r2_min_test))
+    experiment.log_metric("r2_max_test", np.mean(r2_max_test))
 
     # Save the model
     torch.save(model.state_dict(), "model.pth")

@@ -1,7 +1,7 @@
 GPU = 1
 CPU = 2
 T = 60
-DATA = "small_test_run"
+DATA = "popfva_samples"
 EPOCHS = 1000
 N_FEAT = 32
 
