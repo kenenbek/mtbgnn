@@ -1,9 +1,9 @@
 GPU = 1
 CPU = 2
-T = 60
+T = 600
 DATA = "popfva_samples"
-EPOCHS = 1000
-N_FEAT = 32
+EPOCHS = 100
+N_FEAT = 256
 
 hse-run:
 	echo "#!/bin/bash" > run.sh;
