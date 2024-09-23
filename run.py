@@ -96,7 +96,7 @@ if __name__ == '__main__':
                 permute_train_loader = DataLoader(permutation_dataset,
                                                   batch_size=64,
                                                   shuffle=True,
-                                                  num_workers=0,
+                                                  num_workers=num_workers,
                                                   follow_batch=["reactions", "constraints"]
                                                   )
                 for permute_batch in permute_train_loader:
