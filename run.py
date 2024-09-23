@@ -104,6 +104,7 @@ if __name__ == '__main__':
                     x_dict, edge_index_dict, batch_indices, y, y_sign = create_x_and_edges(permute_batch, device)
                     out = model(x_dict, edge_index_dict, batch_indices, y_sign)
                     loss = F.mse_loss(out, y)
+                    experiment.log_metric("loss", loss.item(), step=epoch)
                     loss.backward()
                     optimizer.step()
 
@@ -139,8 +140,8 @@ if __name__ == '__main__':
                         r2_min_val.append(r2_min)
                         r2_max_val.append(r2_max)
 
-                    experiment.log_metric("r2_min_val", np.mean(r2_min_val))
-                    experiment.log_metric("r2_max_val", np.mean(r2_max_val))
+                    experiment.log_metric("r2_min_val", np.mean(r2_min_val), step=epoch)
+                    experiment.log_metric("r2_max_val", np.mean(r2_max_val), step=epoch)
 
     ## testing
     with torch.no_grad():
