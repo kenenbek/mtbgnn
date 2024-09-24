@@ -57,10 +57,10 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device: ", device)
 
-    batch_size = 512
+    batch_size = 64
     n_epochs = args.epochs
     n_features = args.features
-    num_workers = 4
+    num_workers = 8
 
     model = ModelSageConv(rec_features=3, con_features=1, n_features=n_features).double()
     model.to(device)
