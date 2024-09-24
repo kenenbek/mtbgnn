@@ -35,9 +35,14 @@ class GraphDataset(Dataset):
             data = torch.load(os.path.join(self.root, file), weights_only=False)
             objective_values.append(data['objective_value'])  # Assuming 'objective_value' is a key in your data
 
-        binned_objective_values = np.digitize(objective_values,
-                                              np.linspace(min(objective_values), max(objective_values),
-                                                          num_bins))
+        bin_edges = np.linspace(min(objective_values), max(objective_values), self.num_bins + 1)
+        binned_objective_values = np.digitize(objective_values, bin_edges)
+        bin_counts = np.bincount(binned_objective_values, minlength=self.num_bins + 1)  # Counts for each bin
+
+        # Print bin information
+        print("Objective Values Binned into 10 Bins:")
+        for i in range(1, num_bins + 1):  # Bins range from 1 to num_bins
+            print(f"Bin {i}: {bin_counts[i]} samples (Range: {bin_edges[i - 1]} - {bin_edges[i]})")
 
         """
         Undersample the abundant bins so that no more than  examples
