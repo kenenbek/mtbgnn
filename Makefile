@@ -1,6 +1,6 @@
 GPU = 1
 CPU = 2
-T = 600
+T = 1000
 DATA = "popfva_samples"
 EPOCHS = 100
 N_FEAT = 256
