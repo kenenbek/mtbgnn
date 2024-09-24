@@ -57,7 +57,7 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device: ", device)
 
-    batch_size = 256
+    batch_size = 512
     n_epochs = args.epochs
     n_features = args.features
     num_workers = 4
@@ -115,7 +115,7 @@ if __name__ == '__main__':
                 experiment.log_metric("loss", total_loss / n, step=step)
                 step += 1
 
-                if step % 50 == 0:
+                if step % 10 == 0:
                     model.eval()
                     with torch.no_grad():
                         r2_min_val = []

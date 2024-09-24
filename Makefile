@@ -1,5 +1,5 @@
 GPU = 1
-CPU = 2
+CPU = 4
 T = 1000
 DATA = "popfva_samples"
 EPOCHS = 100
