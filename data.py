@@ -50,7 +50,7 @@ class GraphDataset(Dataset):
             bin_indices = [i for i, b in enumerate(binned_objective_values) if b == bin_value]
 
             # Undersample if there are more examples than the max allowed
-            if len(bin_indices) > self.max_per_bin:
+            if len(bin_indices) > max_per_bin:
                 bin_indices = np.random.choice(bin_indices, max_per_bin, replace=False).tolist()
 
             indices_to_keep.extend(bin_indices)
