@@ -66,6 +66,7 @@ if __name__ == '__main__':
     model.to(device)
 
     dataset = GraphDataset(root=args.data)
+    dataset.undersample(num_bins=10, max_per_bin=50)
 
     train_size = int(len(dataset) * 0.7)
     valid_size = int(len(dataset) * 0.15)
@@ -83,11 +84,10 @@ if __name__ == '__main__':
     optimizer = optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08)
 
     with experiment.train():
-        step = 0
+        step, val_step = 0, 0
         for epoch in range(n_epochs):
             experiment.log_current_epoch(epoch)
             model.train()
-
             for single_hetero_graph in train_loader:
                 len_dataset = 2 * single_hetero_graph["reactions"].x.shape[0]
                 permutation_dataset = GraphPermutedDataset(single_hetero_graph,
@@ -99,49 +99,57 @@ if __name__ == '__main__':
                                                   num_workers=num_workers,
                                                   follow_batch=["reactions", "constraints"]
                                                   )
+                total_loss = 0
+                n = 0
                 for permute_batch in permute_train_loader:
                     optimizer.zero_grad()
                     x_dict, edge_index_dict, batch_indices, y, y_sign = create_x_and_edges(permute_batch, device)
                     out = model(x_dict, edge_index_dict, batch_indices, y_sign)
                     loss = F.mse_loss(out, y)
-                    experiment.log_metric("loss", loss.item(), step=epoch)
                     loss.backward()
                     optimizer.step()
 
-            if epoch % 3 == 0:
-                model.eval()
-                with torch.no_grad():
-                    r2_min_val = []
-                    r2_max_val = []
-                    for single_hetero_graph in valid_loader:
-                        x_dict, edge_index_dict, batch_indices, y, y_sign = create_x_and_edges(single_hetero_graph,
-                                                                                               device,
-                                                                                               fba=True)
-                        obj_value = model(x_dict, edge_index_dict, batch_indices, y_sign)
-                        len_dataset = single_hetero_graph["reactions"].x.shape[0]
+                    total_loss += loss.item()
+                    n += 1
 
-                        r2_min = fva_pass_without_grad(model=model,
-                                                       single_hetero_graph=single_hetero_graph,
-                                                       len_dataset=len_dataset,
-                                                       obj_value=obj_value,
-                                                       y_sign=1,
-                                                       batch_size=batch_size,
-                                                       num_workers=num_workers,
-                                                       device=device)
+                experiment.log_metric("loss", total_loss / n, step=step)
+                step += 1
 
-                        r2_max = fva_pass_without_grad(model=model,
-                                                       single_hetero_graph=single_hetero_graph,
-                                                       len_dataset=len_dataset,
-                                                       obj_value=obj_value,
-                                                       y_sign=-1,
-                                                       batch_size=batch_size,
-                                                       num_workers=num_workers,
-                                                       device=device)
-                        r2_min_val.append(r2_min)
-                        r2_max_val.append(r2_max)
+                if step % 50 == 0:
+                    model.eval()
+                    with torch.no_grad():
+                        r2_min_val = []
+                        r2_max_val = []
+                        for single_hetero_graph in valid_loader:
+                            x_dict, edge_index_dict, batch_indices, y, y_sign = create_x_and_edges(single_hetero_graph,
+                                                                                                   device,
+                                                                                                   fba=True)
+                            obj_value = model(x_dict, edge_index_dict, batch_indices, y_sign)
+                            len_dataset = single_hetero_graph["reactions"].x.shape[0]
 
-                    experiment.log_metric("r2_min_val", np.mean(r2_min_val), step=epoch)
-                    experiment.log_metric("r2_max_val", np.mean(r2_max_val), step=epoch)
+                            r2_min = fva_pass_without_grad(model=model,
+                                                           single_hetero_graph=single_hetero_graph,
+                                                           len_dataset=len_dataset,
+                                                           obj_value=obj_value,
+                                                           y_sign=1,
+                                                           batch_size=batch_size,
+                                                           num_workers=num_workers,
+                                                           device=device)
+
+                            r2_max = fva_pass_without_grad(model=model,
+                                                           single_hetero_graph=single_hetero_graph,
+                                                           len_dataset=len_dataset,
+                                                           obj_value=obj_value,
+                                                           y_sign=-1,
+                                                           batch_size=batch_size,
+                                                           num_workers=num_workers,
+                                                           device=device)
+                            r2_min_val.append(r2_min)
+                            r2_max_val.append(r2_max)
+
+                        experiment.log_metric("r2_min_val", np.mean(r2_min_val), step=val_step)
+                        experiment.log_metric("r2_max_val", np.mean(r2_max_val), step=val_step)
+                        val_step += 1
 
     ## testing
     with torch.no_grad():
