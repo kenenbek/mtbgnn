@@ -1,6 +1,6 @@
 import os
 from pyexpat import features
-
+import numpy as np
 import torch
 from torch_geometric.data import Dataset, HeteroData, InMemoryDataset
 from sklearn.metrics import r2_score
@@ -27,6 +27,36 @@ class GraphDataset(Dataset):
         data_path = os.path.join(self.root, self.file_list[idx])
         data = torch.load(data_path, weights_only=False)
         return data
+
+    def undersample(self, num_bins, max_per_bin):
+        objective_values = []
+
+        for file in self.file_list:
+            data = torch.load(os.path.join(self.root, file), weights_only=False)
+            objective_values.append(data['objective_value'])  # Assuming 'objective_value' is a key in your data
+
+        binned_objective_values = np.digitize(objective_values,
+                                                   np.linspace(min(self.objective_values), max(self.objective_values),
+                                                               num_bins))
+
+        """
+        Undersample the abundant bins so that no more than  examples
+        are kept for each bin of objective values.
+        """
+        indices_to_keep = []
+
+        # Iterate over each bin and collect indices while ensuring no more than max_per_bin examples per bin
+        for bin_value in range(1, self.num_bins + 1):  # bin values range from 1 to num_bins (due to np.digitize)
+            bin_indices = [i for i, b in enumerate(self.binned_objective_values) if b == bin_value]
+
+            # Undersample if there are more examples than the max allowed
+            if len(bin_indices) > self.max_per_bin:
+                bin_indices = np.random.choice(bin_indices, self.max_per_bin, replace=False).tolist()
+
+            indices_to_keep.extend(bin_indices)
+
+        # Filter file_list and objective_values to keep only the undersampled examples
+        self.file_list = [self.file_list[i] for i in indices_to_keep]
 
 
 class FilteredDataset(InMemoryDataset):

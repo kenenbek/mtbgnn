@@ -57,7 +57,7 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device: ", device)
 
-    batch_size = 64
+    batch_size = 256
     n_epochs = args.epochs
     n_features = args.features
     num_workers = 4
@@ -94,7 +94,7 @@ if __name__ == '__main__':
                                                            len_dataset=len_dataset,
                                                            y_sign=None)
                 permute_train_loader = DataLoader(permutation_dataset,
-                                                  batch_size=64,
+                                                  batch_size=batch_size,
                                                   shuffle=True,
                                                   num_workers=num_workers,
                                                   follow_batch=["reactions", "constraints"]
