@@ -46,12 +46,12 @@ class GraphDataset(Dataset):
         indices_to_keep = []
 
         # Iterate over each bin and collect indices while ensuring no more than max_per_bin examples per bin
-        for bin_value in range(1, self.num_bins + 1):  # bin values range from 1 to num_bins (due to np.digitize)
+        for bin_value in range(1, num_bins + 1):  # bin values range from 1 to num_bins (due to np.digitize)
             bin_indices = [i for i, b in enumerate(binned_objective_values) if b == bin_value]
 
             # Undersample if there are more examples than the max allowed
             if len(bin_indices) > self.max_per_bin:
-                bin_indices = np.random.choice(bin_indices, self.max_per_bin, replace=False).tolist()
+                bin_indices = np.random.choice(bin_indices, max_per_bin, replace=False).tolist()
 
             indices_to_keep.extend(bin_indices)
 
