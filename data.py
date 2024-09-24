@@ -36,8 +36,8 @@ class GraphDataset(Dataset):
             objective_values.append(data['objective_value'])  # Assuming 'objective_value' is a key in your data
 
         binned_objective_values = np.digitize(objective_values,
-                                                   np.linspace(min(self.objective_values), max(self.objective_values),
-                                                               num_bins))
+                                              np.linspace(min(objective_values), max(objective_values),
+                                                          num_bins))
 
         """
         Undersample the abundant bins so that no more than  examples
@@ -47,7 +47,7 @@ class GraphDataset(Dataset):
 
         # Iterate over each bin and collect indices while ensuring no more than max_per_bin examples per bin
         for bin_value in range(1, self.num_bins + 1):  # bin values range from 1 to num_bins (due to np.digitize)
-            bin_indices = [i for i, b in enumerate(self.binned_objective_values) if b == bin_value]
+            bin_indices = [i for i, b in enumerate(binned_objective_values) if b == bin_value]
 
             # Undersample if there are more examples than the max allowed
             if len(bin_indices) > self.max_per_bin:
@@ -63,9 +63,6 @@ class FilteredDataset(InMemoryDataset):
     def __init__(self, root, data_list):
         self.data, self.slices = self.collate(data_list)
         super(FilteredDataset, self).__init__(root)
-
-
-
 
 
 class GraphPermutedDataset(Dataset):
@@ -92,11 +89,11 @@ class GraphPermutedDataset(Dataset):
 
         self.len_dataset = len_dataset
         self.y_sign = y_sign
-        self.y_ind = {1:0, -1:1}
+        self.y_ind = {1: 0, -1: 1}
 
     def set_biomass_constraint(self, objective_value):
         self.reactions_features_fva[self.biomass_index] = torch.tensor(
-                [objective_value.item(), objective_value.item()], dtype=torch.float64)
+            [objective_value.item(), objective_value.item()], dtype=torch.float64)
 
     def len(self):
         """Returns the total number of samples."""
