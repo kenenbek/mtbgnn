@@ -37,7 +37,7 @@ class GraphDataset(Dataset):
 
         bin_edges = np.linspace(min(objective_values), max(objective_values), num_bins + 1)
         binned_objective_values = np.digitize(objective_values, bin_edges)
-        bin_counts = np.bincount(binned_objective_values, minlength=self.num_bins + 1)  # Counts for each bin
+        bin_counts = np.bincount(binned_objective_values, minlength=num_bins + 1)  # Counts for each bin
 
         # Print bin information
         print("Objective Values Binned into 10 Bins:")
