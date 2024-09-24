@@ -35,7 +35,7 @@ class GraphDataset(Dataset):
             data = torch.load(os.path.join(self.root, file), weights_only=False)
             objective_values.append(data['objective_value'])  # Assuming 'objective_value' is a key in your data
 
-        bin_edges = np.linspace(min(objective_values), max(objective_values), self.num_bins + 1)
+        bin_edges = np.linspace(min(objective_values), max(objective_values), num_bins + 1)
         binned_objective_values = np.digitize(objective_values, bin_edges)
         bin_counts = np.bincount(binned_objective_values, minlength=self.num_bins + 1)  # Counts for each bin
 
