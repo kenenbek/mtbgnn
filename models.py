@@ -35,7 +35,7 @@ class ModelSageConv(torch.nn.Module):
         self.output3 = nn.Linear(n_features, 1)
 
 
-    def forward(self, x_dict, edge_index_dict, batch_mask, y_sign):
+    def forward(self, x_dict, edge_index_dict, batch_mask, y_sign, glob_opt_ids):
         x_dict["reactions"] = self.init_rec(x_dict["reactions"])
         x_dict["constraints"] = self.init_con(x_dict["constraints"])
 
@@ -59,7 +59,8 @@ class ModelSageConv(torch.nn.Module):
         out = self.norm2(out)
         out = F.relu(out)
 
-        out = global_mean_pool(out, batch_mask)
+        #out = global_mean_pool(out, batch_mask)
+        out = out[glob_opt_ids]
         out = self.output3(out) * y_sign.unsqueeze(1)
         return out.squeeze(1)
 

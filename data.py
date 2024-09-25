@@ -136,6 +136,8 @@ class GraphPermutedDataset(Dataset):
 
         new_graph[("reactions", "to", "constraints")].edge_index = self.r_to_c.edge_index
         new_graph[("reactions", "to", "constraints")].edge_attr = self.r_to_c.edge_attr
+
+        new_graph["opt_idx"] = idx
         return new_graph
 
 
@@ -143,6 +145,9 @@ def create_x_and_edges(hetero_batch, device, fba=False):
     x_dict = {node_type: hetero_batch[node_type].x.to(device) for node_type in hetero_batch.node_types}
     edge_index_dict = {k: hetero_batch[k].edge_index.to(device) for k in hetero_batch.edge_types}
     batch_indices = hetero_batch["reactions"].batch.to(device)
+    opt_indices = hetero_batch["opt_idx"].to(device)
+    global_indices = create_global_indices(batch_indices, opt_indices, 1071).to(device)
+
     if not fba:
         y = hetero_batch["reactions"].y.to(device)
         y_sign = hetero_batch["reactions"].y_sign.to(device)
@@ -155,7 +160,22 @@ def create_x_and_edges(hetero_batch, device, fba=False):
         c_vector[index] = y_sign
         x_dict["reactions"] = torch.cat((c_vector.unsqueeze(1), x_dict["reactions"]), dim=1)
 
-    return x_dict, edge_index_dict, batch_indices, y, y_sign
+    return x_dict, edge_index_dict, batch_indices, y, y_sign, global_indices
+
+
+def create_global_indices(batch_indices, opt_indices, nodes_per_batch):
+    batch_size = batch_indices.max().item() + 1
+    # Create a matrix to store the global indices of the nodes for each batch
+    batch_idx_matrix = torch.full((64, nodes_per_batch), -1, dtype=torch.long)
+
+    # For each node, assign its position within its respective batch
+    for i in range(batch_size):
+        batch_mask = (batch_indices == i)
+        node_indices = torch.nonzero(batch_mask, as_tuple=False).squeeze()  # Global indices of nodes in batch i
+        batch_idx_matrix[i, :len(node_indices)] = node_indices
+
+    global_indices = batch_idx_matrix[torch.arange(batch_size), opt_indices]
+    return global_indices
 
 
 if __name__ == '__main__':

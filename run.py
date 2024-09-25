@@ -33,8 +33,8 @@ def fva_pass_without_grad(model, single_hetero_graph, len_dataset, obj_value, y_
     true_y = []
 
     for batch in val_loader:
-        x_dict, edge_index_dict, batch_indices, y, y_sign = create_x_and_edges(batch, device)
-        out = model(x_dict, edge_index_dict, batch_indices, y_sign)
+        x_dict, edge_index_dict, batch_indices, y, y_sign, glob_opt_ids = create_x_and_edges(batch, device)
+        out = model(x_dict, edge_index_dict, batch_indices, y_sign, glob_opt_ids)
         outs.extend(out.cpu().tolist())
         true_y.extend(y.cpu().tolist())
 
@@ -103,8 +103,8 @@ if __name__ == '__main__':
                 n = 0
                 for permute_batch in permute_train_loader:
                     optimizer.zero_grad()
-                    x_dict, edge_index_dict, batch_indices, y, y_sign = create_x_and_edges(permute_batch, device)
-                    out = model(x_dict, edge_index_dict, batch_indices, y_sign)
+                    x_dict, edge_index_dict, batch_indices, y, y_sign, glob_opt_ids = create_x_and_edges(permute_batch, device)
+                    out = model(x_dict, edge_index_dict, batch_indices, y_sign, glob_opt_ids)
                     loss = F.mse_loss(out, y)
                     loss.backward()
                     optimizer.step()
@@ -121,10 +121,10 @@ if __name__ == '__main__':
                         r2_min_val = []
                         r2_max_val = []
                         for single_hetero_graph in valid_loader:
-                            x_dict, edge_index_dict, batch_indices, y, y_sign = create_x_and_edges(single_hetero_graph,
+                            x_dict, edge_index_dict, batch_indices, y, y_sign, glob_opt_ids = create_x_and_edges(single_hetero_graph,
                                                                                                    device,
                                                                                                    fba=True)
-                            obj_value = model(x_dict, edge_index_dict, batch_indices, y_sign)
+                            obj_value = model(x_dict, edge_index_dict, batch_indices, y_sign, glob_opt_ids)
                             len_dataset = single_hetero_graph["reactions"].x.shape[0]
 
                             r2_min = fva_pass_without_grad(model=model,
@@ -157,10 +157,10 @@ if __name__ == '__main__':
         r2_min_test = []
         r2_max_test = []
         for single_hetero_graph in test_loader:
-            x_dict, edge_index_dict, batch_indices, y, y_sign = create_x_and_edges(single_hetero_graph,
+            x_dict, edge_index_dict, batch_indices, y, y_sign, glob_opt_ids = create_x_and_edges(single_hetero_graph,
                                                                                    device,
                                                                                    fba=True)
-            obj_value = model(x_dict, edge_index_dict, batch_indices, y_sign)
+            obj_value = model(x_dict, edge_index_dict, batch_indices, y_sign, glob_opt_ids)
             len_dataset = single_hetero_graph["reactions"].x.shape[0]
 
             r2_min = fva_pass_without_grad(model=model,
