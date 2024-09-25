@@ -3,7 +3,7 @@ CPU = 8
 T = 1000
 DATA = "popfva_samples"
 EPOCHS = 100
-N_FEAT = 2048
+N_FEAT = 1024
 
 hse-run:
 	echo "#!/bin/bash" > run.sh;
