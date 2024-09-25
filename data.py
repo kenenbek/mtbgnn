@@ -166,7 +166,7 @@ def create_x_and_edges(hetero_batch, device, fba=False):
 def create_global_indices(batch_indices, opt_indices, nodes_per_batch):
     batch_size = batch_indices.max().item() + 1
     # Create a matrix to store the global indices of the nodes for each batch
-    batch_idx_matrix = torch.full((64, nodes_per_batch), -1, dtype=torch.long)
+    batch_idx_matrix = torch.full((batch_size, nodes_per_batch), -1, dtype=torch.long)
 
     # For each node, assign its position within its respective batch
     for i in range(batch_size):
