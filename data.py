@@ -149,7 +149,7 @@ def create_x_and_edges(hetero_batch, device, fba=False):
     if not fba:
         y = hetero_batch["reactions"].y.to(device)
         y_sign = hetero_batch["reactions"].y_sign.to(device)
-        opt_indices = hetero_batch["opt_idx"].to(device)
+        opt_indices = hetero_batch["opt_idx"]
         global_indices = create_global_indices(batch_indices, opt_indices, 1071).to(device)
     else:
         index = hetero_batch["biomass_index"].item()
@@ -160,7 +160,7 @@ def create_x_and_edges(hetero_batch, device, fba=False):
         c_vector[index] = y_sign
         x_dict["reactions"] = torch.cat((c_vector.unsqueeze(1), x_dict["reactions"]), dim=1)
 
-        global_indices = hetero_batch["biomass_index"]
+        global_indices = hetero_batch["biomass_index"].to(device)
 
     return x_dict, edge_index_dict, batch_indices, y, y_sign, global_indices
 
