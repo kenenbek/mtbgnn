@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.nn import HeteroConv, SAGEConv
+from torch_geometric.nn import HeteroConv, SAGEConv, GATv2Conv
 from torch_geometric.nn import global_mean_pool
 
 
@@ -16,31 +16,16 @@ class ModelSageConv(torch.nn.Module):
         self.init_con = nn.Linear(con_features, n_features)
 
         self.conv_rec_to_con_1 = HeteroConv({
-            ('reactions', 'to', 'constraints'): SAGEConv(n_features, n_features,
-                                                         normalize=True,
-                                                         root_weight=True,
-                                                         project=True)
+            ('reactions', 'to', 'constraints'): init_gat_layer(n_features)
         }, aggr='mean')
         self.conv_con_to_rec_1 = HeteroConv({
-            ('constraints', 'to', 'reactions'): SAGEConv(n_features, n_features,
-                                                         normalize=True,
-                                                         root_weight=True,
-                                                         project=True
-                                                         )
+            ('constraints', 'to', 'reactions'): init_gat_layer(n_features)
         }, aggr='mean')
         self.conv_rec_to_con_2 = HeteroConv({
-            ('reactions', 'to', 'constraints'): SAGEConv(n_features, n_features,
-                                                         normalize=True,
-                                                         root_weight=True,
-                                                         project=True
-                                                         )
+            ('reactions', 'to', 'constraints'): init_gat_layer(n_features)
         }, aggr='mean')
         self.conv_con_to_rec_2 = HeteroConv({
-            ('constraints', 'to', 'reactions'): SAGEConv(n_features, n_features,
-                                                         normalize=True,
-                                                         root_weight=True,
-                                                         project=True
-                                                         )
+            ('constraints', 'to', 'reactions'): init_gat_layer(n_features)
         }, aggr='mean')
 
         self.output1 = nn.Linear(n_features, n_features)
@@ -78,6 +63,16 @@ class ModelSageConv(torch.nn.Module):
         out = self.output3(out) * y_sign.unsqueeze(1)
         return out.squeeze(1)
 
+
+def init_gat_layer(n_features):
+    return GATv2Conv(in_channels=n_features,
+                     out_channels=n_features,
+                     heads=2,
+                     concat=False,
+                     dropout=0.2,
+                     add_self_loops=False,
+                     edge_dim=1,
+                     )
 
 def compute_loss(out, true_fva, S, batch_size):
     fva_loss_min = F.mse_loss(out[:, 0], true_fva[:, 0])
