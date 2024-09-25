@@ -16,16 +16,16 @@ class ModelSageConv(torch.nn.Module):
         self.init_con = nn.Linear(con_features, n_features)
 
         self.conv_rec_to_con_1 = HeteroConv({
-            ('reactions', 'to', 'constraints'): init_gcn_layer(n_features)
+            ('reactions', 'to', 'constraints'): init_sage_layer(n_features)
         }, aggr='mean')
         self.conv_con_to_rec_1 = HeteroConv({
-            ('constraints', 'to', 'reactions'): init_gcn_layer(n_features)
+            ('constraints', 'to', 'reactions'): init_sage_layer(n_features)
         }, aggr='mean')
         self.conv_rec_to_con_2 = HeteroConv({
-            ('reactions', 'to', 'constraints'): init_gcn_layer(n_features)
+            ('reactions', 'to', 'constraints'): init_sage_layer(n_features)
         }, aggr='mean')
         self.conv_con_to_rec_2 = HeteroConv({
-            ('constraints', 'to', 'reactions'): init_gcn_layer(n_features)
+            ('constraints', 'to', 'reactions'): init_sage_layer(n_features)
         }, aggr='mean')
 
         self.output1 = nn.Linear(n_features, n_features)
@@ -79,6 +79,13 @@ def init_gcn_layer(n_features):
                    out_channels=n_features,
                    add_self_loops=False
                    )
+
+def init_sage_layer(n_features):
+    return SAGEConv(in_channels=n_features,
+                    out_channels=n_features,
+                    normalize=True,
+                    root_weight=True,
+                    project=True)
 
 def compute_loss(out, true_fva, S, batch_size):
     fva_loss_min = F.mse_loss(out[:, 0], true_fva[:, 0])
